@@ -36,7 +36,7 @@ function drawBackground(painter: Painter, sourceCache: SourceCache, layer: Backg
 
     const program = painter.useProgram(image ? 'backgroundPattern' : 'background');
 
-    const tileIDs = transform.coveringTiles({tileSize});
+    const tileIDs = transform.coveringTiles({tileSize, sourceCache});
 
     if (image) {
         context.activeTexture.set(gl.TEXTURE0);

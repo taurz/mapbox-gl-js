@@ -102,7 +102,8 @@ type MapOptions = {
     maxTileCacheSize?: number,
     transformRequest?: RequestTransformFunction,
     accessToken: string,
-    locale?: Object
+    locale?: Object,
+    showLogo?: Boolean
 };
 
 const defaultMinZoom = -2;
@@ -151,7 +152,8 @@ const defaultOptions = {
     transformRequest: null,
     accessToken: null,
     fadeDuration: 300,
-    crossSourceCollisions: true
+    crossSourceCollisions: true,
+    showLogo: false
 };
 
 /**
@@ -469,11 +471,26 @@ class Map extends Camera {
         if (options.attributionControl)
             this.addControl(new AttributionControl({customAttribution: options.customAttribution}));
 
-        this.addControl(new LogoControl(), options.logoPosition);
+        if (options.showLogo) {
+            this.addControl(new LogoControl(), options.logoPosition);
+        }
 
         this.on('style.load', () => {
+            const validBounds = Object.values(this.style.stylesheet.sources).map(item => item.bounds).filter(bounds => !!bounds);
+            const bounds = this.mixBounds(validBounds);
+            this.transform.setBounds(bounds);
+
             if (this.transform.unmodified) {
                 this.jumpTo((this.style.stylesheet: any));
+            }
+
+            if (bounds) {
+                this.jumpTo({
+                    center: options.center,
+                    zoom: options.zoom,
+                    bearing: options.bearing,
+                    pitch: options.pitch
+                });
             }
         });
         this.on('data', (event: MapDataEvent) => {
@@ -483,6 +500,24 @@ class Map extends Camera {
         this.on('dataloading', (event: MapDataEvent) => {
             this.fire(new Event(`${event.dataType}dataloading`, event));
         });
+    }
+
+    mixBounds(boundsArray: Array<Array<Number>>) {
+        if (boundsArray.length > 0) {
+            let xmin = Infinity,
+                ymin = Infinity,
+                xmax = -Infinity,
+                ymax = -Infinity;
+            boundsArray.forEach(([_xmin, _ymin, _xmax, _ymax]) => {
+                xmin = Math.min(xmin, _xmin);
+                ymin = Math.min(ymin, _ymin);
+                xmax = Math.max(xmax, _xmax);
+                ymax = Math.max(ymax, _ymax);
+            });
+            return LngLatBounds.convert([xmin, ymin, xmax, ymax]);
+        } else {
+            return null;
+        }
     }
 
     /*

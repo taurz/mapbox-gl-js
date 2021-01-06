@@ -7,14 +7,16 @@ import MercatorCoordinate from '../geo/mercator_coordinate';
 
 import assert from 'assert';
 import {register} from '../util/web_worker_transfer';
+import LngLatBounds from '../geo/lng_lat_bounds';
 
 export class CanonicalTileID {
     z: number;
     x: number;
     y: number;
     key: string;
+    bounds: LngLatBounds
 
-    constructor(z: number, x: number, y: number) {
+    constructor(z: number, x: number, y: number, bounds?: LngLatBounds) {
         assert(z >= 0 && z <= 25);
         assert(x >= 0 && x < Math.pow(2, z));
         assert(y >= 0 && y < Math.pow(2, z));
@@ -22,6 +24,7 @@ export class CanonicalTileID {
         this.x = x;
         this.y = y;
         this.key = calculateKey(0, z, z, x, y);
+        this.bounds = bounds;
     }
 
     equals(id: CanonicalTileID) {
@@ -73,11 +76,11 @@ export class OverscaledTileID {
     key: string;
     posMatrix: Float32Array;
 
-    constructor(overscaledZ: number, wrap: number, z: number, x: number, y: number) {
+    constructor(overscaledZ: number, wrap: number, z: number, x: number, y: number, bounds?: LngLatBounds) {
         assert(overscaledZ >= z);
         this.overscaledZ = overscaledZ;
         this.wrap = wrap;
-        this.canonical = new CanonicalTileID(z, +x, +y);
+        this.canonical = new CanonicalTileID(z, +x, +y, bounds);
         this.key = calculateKey(wrap, overscaledZ, z, x, y);
     }
 
@@ -195,5 +198,5 @@ function getQuadkey(z, x, y) {
     return quadkey;
 }
 
-register('CanonicalTileID', CanonicalTileID);
+register('CanonicalTileID', CanonicalTileID, {omit: ['bounds']});
 register('OverscaledTileID', OverscaledTileID, {omit: ['posMatrix']});

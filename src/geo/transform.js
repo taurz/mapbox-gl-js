@@ -13,6 +13,7 @@ import EdgeInsets from './edge_insets';
 
 import {UnwrappedTileID, OverscaledTileID, CanonicalTileID} from '../source/tile_id';
 import type {PaddingOptions} from './edge_insets';
+import SourceCache from '../source/source_cache';
 
 /**
  * A single transform, generally used for a single tile to be
@@ -55,6 +56,7 @@ class Transform {
     _constraining: boolean;
     _posMatrixCache: {[_: string]: Float32Array};
     _alignedPosMatrixCache: {[_: string]: Float32Array};
+    _bounds: LngLatBounds;
 
     constructor(minZoom: ?number, maxZoom: ?number, minPitch: ?number, maxPitch: ?number, renderWorldCopies: boolean | void) {
         this.tileSize = 512; // constant
@@ -96,6 +98,7 @@ class Transform {
         clone._unmodified = this._unmodified;
         clone._edgeInsets = this._edgeInsets.clone();
         clone._calcMatrices();
+        clone._bounds = this._bounds ? LngLatBounds.convert(this._bounds.toArray()) : null;
         return clone;
     }
 
@@ -243,7 +246,7 @@ class Transform {
 
     /**
      * Helper method to upadte edge-insets inplace
-     *
+     * @param {PaddingOptions} start
      * @param {PaddingOptions} target
      * @param {number} t
      * @memberof Transform
@@ -315,6 +318,7 @@ class Transform {
     coveringTiles(
         options: {
             tileSize: number,
+            sourceCache: SourceCache,
             minzoom?: number,
             maxzoom?: number,
             roundZoom?: boolean,
@@ -324,11 +328,13 @@ class Transform {
     ): Array<OverscaledTileID> {
         let z = this.coveringZoomLevel(options);
         const actualZ = z;
+        const source = options.sourceCache.getSource();
+        const bounds = source.type === "vector" ? source.tileBounds.bounds : null;
 
         if (options.minzoom !== undefined && z < options.minzoom) return [];
         if (options.maxzoom !== undefined && z > options.maxzoom) z = options.maxzoom;
 
-        const centerCoord = MercatorCoordinate.fromLngLat(this.center);
+        const centerCoord = MercatorCoordinate.fromLngLat(this.center, 0, bounds);
         const numTiles = Math.pow(2, z);
         const centerPoint = [numTiles * centerCoord.x, numTiles * centerCoord.y, 0];
         const cameraFrustum = Frustum.fromInvProjectionMatrix(this.invProjMatrix, this.worldSize, z);
@@ -400,7 +406,7 @@ class Transform {
             // Have we reached the target depth or is the tile too far away to be any split further?
             if (it.zoom === maxZoom || (longestDim > distToSplit && it.zoom >= minZoom)) {
                 result.push({
-                    tileID: new OverscaledTileID(it.zoom === maxZoom ? overscaledZ : it.zoom, it.wrap, it.zoom, x, y),
+                    tileID: new OverscaledTileID(it.zoom === maxZoom ? overscaledZ : it.zoom, it.wrap, it.zoom, x, y, bounds),
                     distanceSq: vec2.sqrLen([centerPoint[0] - 0.5 - x, centerPoint[1] - 0.5 - y])
                 });
                 continue;
@@ -432,14 +438,17 @@ class Transform {
     scaleZoom(scale: number) { return Math.log(scale) / Math.LN2; }
 
     project(lnglat: LngLat) {
-        const lat = clamp(lnglat.lat, -this.maxValidLatitude, this.maxValidLatitude);
+        const b = this._bounds;
+        const ymin = b ? b.getSouth() : -this.maxValidLatitude;
+        const ymax = b ? b.getNorth() : this.maxValidLatitude;
+        const lat = clamp(lnglat.lat, ymin, ymax);
         return new Point(
-                mercatorXfromLng(lnglat.lng) * this.worldSize,
-                mercatorYfromLat(lat) * this.worldSize);
+                mercatorXfromLng(lnglat.lng, b) * this.worldSize,
+                mercatorYfromLat(lat, b) * this.worldSize);
     }
 
     unproject(point: Point): LngLat {
-        return new MercatorCoordinate(point.x / this.worldSize, point.y / this.worldSize).toLngLat();
+        return new MercatorCoordinate(point.x / this.worldSize, point.y / this.worldSize).toLngLat(this._bounds);
     }
 
     get point(): Point { return this.project(this.center); }
@@ -450,7 +459,7 @@ class Transform {
         const loc = this.locationCoordinate(lnglat);
         const newCenter = new MercatorCoordinate(
                 loc.x - (a.x - b.x),
-                loc.y - (a.y - b.y));
+            loc.y - (a.y - b.y));
         this.center = this.coordinateLocation(newCenter);
         if (this._renderWorldCopies) {
             this.center = this.center.wrap();
@@ -485,7 +494,7 @@ class Transform {
      * @private
      */
     locationCoordinate(lnglat: LngLat) {
-        return MercatorCoordinate.fromLngLat(lnglat);
+        return MercatorCoordinate.fromLngLat(lnglat, 0, this._bounds);
     }
 
     /**
@@ -495,7 +504,7 @@ class Transform {
      * @private
      */
     coordinateLocation(coord: MercatorCoordinate) {
-        return coord.toLngLat();
+        return coord.toLngLat(this._bounds);
     }
 
     pointCoordinate(p: Point) {
@@ -577,6 +586,15 @@ class Transform {
         }
     }
 
+    setBounds(bounds?: LngLatBounds) {
+        this._bounds = bounds;
+        if (bounds) {
+            this.lngRange = null;
+            this.latRange = null;
+            this._constrain();
+        }
+    }
+
     /**
      * Calculate the posMatrix that, given a tile coordinate, would be used to display the tile on a map.
      * @param {UnwrappedTileID} unwrappedTileID;
@@ -611,25 +629,25 @@ class Transform {
 
         this._constraining = true;
 
-        let minY = -90;
-        let maxY = 90;
-        let minX = -180;
-        let maxX = 180;
+        let minY = this._bounds ? this._bounds.getSouth() : -90;
+        let maxY = this._bounds ? this._bounds.getNorth() : 90;
+        let minX = this._bounds ? this._bounds.getWest() : -180;
+        let maxX = this._bounds ? this._bounds.getEast() : 180;
         let sy, sx, x2, y2;
         const size = this.size,
             unmodified = this._unmodified;
 
         if (this.latRange) {
             const latRange = this.latRange;
-            minY = mercatorYfromLat(latRange[1]) * this.worldSize;
-            maxY = mercatorYfromLat(latRange[0]) * this.worldSize;
+            minY = mercatorYfromLat(latRange[1], this._bounds) * this.worldSize;
+            maxY = mercatorYfromLat(latRange[0], this._bounds) * this.worldSize;
             sy = maxY - minY < size.y ? size.y / (maxY - minY) : 0;
         }
 
         if (this.lngRange) {
             const lngRange = this.lngRange;
-            minX = mercatorXfromLng(lngRange[0]) * this.worldSize;
-            maxX = mercatorXfromLng(lngRange[1]) * this.worldSize;
+            minX = mercatorXfromLng(lngRange[0], this._bounds) * this.worldSize;
+            maxX = mercatorXfromLng(lngRange[1], this._bounds) * this.worldSize;
             sx = maxX - minX < size.x ? size.x / (maxX - minX) : 0;
         }
 
@@ -641,7 +659,7 @@ class Transform {
         if (s) {
             this.center = this.unproject(new Point(
                 sx ? (maxX + minX) / 2 : point.x,
-                sy ? (maxY + minY) / 2 : point.y));
+                sy ? (maxY + minY) / 2 : point.y), this._bounds);
             this.zoom += this.scaleZoom(s);
             this._unmodified = unmodified;
             this._constraining = false;
@@ -668,7 +686,7 @@ class Transform {
         if (x2 !== undefined || y2 !== undefined) {
             this.center = this.unproject(new Point(
                 x2 !== undefined ? x2 : point.x,
-                y2 !== undefined ? y2 : point.y));
+                y2 !== undefined ? y2 : point.y), this._bounds);
         }
 
         this._unmodified = unmodified;
@@ -725,7 +743,7 @@ class Transform {
         this.mercatorMatrix = mat4.scale([], m, [this.worldSize, this.worldSize, this.worldSize]);
 
         // scale vertically to meters per pixel (inverse of ground resolution):
-        mat4.scale(m, m, [1, 1, mercatorZfromAltitude(1, this.center.lat) * this.worldSize, 1]);
+        mat4.scale(m, m, [1, 1, mercatorZfromAltitude(1, this.center.lat, this._bounds) * this.worldSize, 1]);
 
         this.projMatrix = m;
         this.invProjMatrix = mat4.invert([], this.projMatrix);

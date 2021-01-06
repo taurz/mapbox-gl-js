@@ -107,8 +107,8 @@ function getTileLatRange(painter: Painter, tileID: OverscaledTileID) {
     const tilesAtZoom = Math.pow(2, tileID.canonical.z);
     const y = tileID.canonical.y;
     return [
-        new MercatorCoordinate(0, y / tilesAtZoom).toLngLat().lat,
-        new MercatorCoordinate(0, (y + 1) / tilesAtZoom).toLngLat().lat];
+        new MercatorCoordinate(0, y / tilesAtZoom).toLngLat(tileID.canonical.bounds).lat,
+        new MercatorCoordinate(0, (y + 1) / tilesAtZoom).toLngLat(tileID.canonical.bounds).lat];
 }
 
 export {

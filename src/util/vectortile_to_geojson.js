@@ -1,15 +1,17 @@
 // @flow
 import type {GeoJSONGeometry} from '@mapbox/geojson-types';
+import LngLatBounds from '../geo/lng_lat_bounds';
 
 class Feature {
     type: 'Feature';
     _geometry: ?GeoJSONGeometry;
     properties: {};
     id: number | string | void;
+    bounds: LngLatBounds;
 
     _vectorTileFeature: VectorTileFeature;
 
-    constructor(vectorTileFeature: VectorTileFeature, z: number, x: number, y: number, id: string | number | void) {
+    constructor(vectorTileFeature: VectorTileFeature, z: number, x: number, y: number, id: string | number | void, bounds: LngLatBounds) {
         this.type = 'Feature';
 
         this._vectorTileFeature = vectorTileFeature;
@@ -19,6 +21,7 @@ class Feature {
 
         this.properties = vectorTileFeature.properties;
         this.id = id;
+        this.bounds = bounds;
     }
 
     get geometry(): ?GeoJSONGeometry {
@@ -26,7 +29,8 @@ class Feature {
             this._geometry = this._vectorTileFeature.toGeoJSON(
                 (this._vectorTileFeature: any)._x,
                 (this._vectorTileFeature: any)._y,
-                (this._vectorTileFeature: any)._z).geometry;
+                (this._vectorTileFeature: any)._z,
+                this.bounds).geometry;
         }
         return this._geometry;
     }

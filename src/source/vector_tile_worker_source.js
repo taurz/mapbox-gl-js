@@ -2,7 +2,7 @@
 
 import {getArrayBuffer} from '../util/ajax';
 
-import vt from '@mapbox/vector-tile';
+import {VectorTile} from '../vector-tile';
 import Protobuf from 'pbf';
 import WorkerTile from './worker_tile';
 import {extend} from '../util/util';
@@ -47,7 +47,7 @@ function loadVectorTile(params: WorkerTileParameters, callback: LoadVectorDataCa
             callback(err);
         } else if (data) {
             callback(null, {
-                vectorTile: new vt.VectorTile(new Protobuf(data)),
+                vectorTile: new VectorTile(new Protobuf(data)),
                 rawData: data,
                 cacheControl,
                 expires

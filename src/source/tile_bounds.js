@@ -11,7 +11,7 @@ class TileBounds {
     maxzoom: number;
 
     constructor(bounds: [number, number, number, number], minzoom: ?number, maxzoom: ?number) {
-        this.bounds = LngLatBounds.convert(this.validateBounds(bounds));
+        this.bounds = LngLatBounds.convert(bounds);
         this.minzoom = minzoom || 0;
         this.maxzoom = maxzoom || 24;
     }
@@ -25,10 +25,10 @@ class TileBounds {
     contains(tileID: CanonicalTileID) {
         const worldSize = Math.pow(2, tileID.z);
         const level = {
-            minX: Math.floor(mercatorXfromLng(this.bounds.getWest()) * worldSize),
-            minY: Math.floor(mercatorYfromLat(this.bounds.getNorth()) * worldSize),
-            maxX: Math.ceil(mercatorXfromLng(this.bounds.getEast()) * worldSize),
-            maxY: Math.ceil(mercatorYfromLat(this.bounds.getSouth()) * worldSize)
+            minX: Math.floor(mercatorXfromLng(this.bounds.getWest(), this.bounds) * worldSize),
+            minY: Math.floor(mercatorYfromLat(this.bounds.getNorth(), this.bounds) * worldSize),
+            maxX: Math.ceil(mercatorXfromLng(this.bounds.getEast(), this.bounds) * worldSize),
+            maxY: Math.ceil(mercatorYfromLat(this.bounds.getSouth(), this.bounds) * worldSize)
         };
         const hit = tileID.x >= level.minX && tileID.x < level.maxX && tileID.y >= level.minY && tileID.y < level.maxY;
         return hit;

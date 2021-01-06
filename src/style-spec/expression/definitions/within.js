@@ -9,6 +9,8 @@ import type EvaluationContext from '../evaluation_context';
 import type {GeoJSON, GeoJSONPolygon, GeoJSONMultiPolygon} from '@mapbox/geojson-types';
 import Point from '@mapbox/point-geometry';
 import type {CanonicalTileID} from '../../../source/tile_id';
+import type {LngLatBoundsLike} from '../../../geo/lng_lat_bounds';
+import LngLatBounds from '../../../geo/lng_lat_bounds';
 
 type GeoJSONPolygons =| GeoJSONPolygon | GeoJSONMultiPolygon;
 
@@ -23,11 +25,19 @@ function updateBBox(bbox: BBox, coord: Point) {
     bbox[3] = Math.max(bbox[3], coord[1]);
 }
 
-function mercatorXfromLng(lng: number) {
+function mercatorXfromLng(lng: number, bounds?: LngLatBoundsLike) {
+    if (bounds) {
+        const b = LngLatBounds.convert(bounds);
+        return (lng - b.getWest()) / (b.getEast() - b.getWest());
+    }
     return (180 + lng) / 360;
 }
 
-function mercatorYfromLat(lat: number) {
+function mercatorYfromLat(lat: number, bounds?: LngLatBoundsLike) {
+    if (bounds) {
+        const b = LngLatBounds.convert(bounds);
+        return (b.getNorth() - lat) / (b.getNorth() - b.getSouth());
+    }
     return (180 - (180 / Math.PI * Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360)))) / 360;
 }
 
@@ -40,8 +50,8 @@ function boxWithinBox(bbox1: BBox, bbox2: BBox) {
 }
 
 function getTileCoordinates(p, canonical: CanonicalTileID) {
-    const x = mercatorXfromLng(p[0]);
-    const y = mercatorYfromLat(p[1]);
+    const x = mercatorXfromLng(p[0], canonical.bounds);
+    const y = mercatorYfromLat(p[1], canonical.bounds);
     const tilesAtZoom = Math.pow(2, canonical.z);
     return [Math.round(x * tilesAtZoom * EXTENT), Math.round(y * tilesAtZoom * EXTENT)];
 }

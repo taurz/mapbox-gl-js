@@ -491,6 +491,7 @@ class SourceCache extends Evented {
         } else {
             idealTileIDs = transform.coveringTiles({
                 tileSize: this._source.tileSize,
+                sourceCache: this,
                 minzoom: this._source.minzoom,
                 maxzoom: this._source.maxzoom,
                 roundZoom: this._source.roundZoom,
