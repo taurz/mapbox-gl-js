@@ -329,7 +329,7 @@ class Transform {
         let z = this.coveringZoomLevel(options);
         const actualZ = z;
         const source = options.sourceCache.getSource();
-        const bounds = source.type === "vector" ? source.tileBounds.bounds : null;
+        const bounds = source.type === "vector" ? (source.tileBounds ? source.tileBounds.bounds : null) : null;
 
         if (options.minzoom !== undefined && z < options.minzoom) return [];
         if (options.maxzoom !== undefined && z > options.maxzoom) z = options.maxzoom;
